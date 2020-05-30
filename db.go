@@ -65,7 +65,7 @@ func (db *DB) migrate() error {
 	tx, err := db.db.Begin()
 	defer tx.Rollback()
 	if err != nil {
-		return fmt.Errorf("couldn't start db transaction", err)
+		return fmt.Errorf("couldn't start db transaction: %v", err)
 	}
 	var version int
 	// var ver int
