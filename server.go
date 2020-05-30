@@ -106,6 +106,9 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			}
 			index = append(index, i)
 			files[i] = file
+			if name := p.FileName(); name != "" {
+				names[i] = name
+			}
 		case "name":
 			if _, ok := names[i]; ok {
 				http.Error(w, "Bad request", 400)
