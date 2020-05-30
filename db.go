@@ -17,8 +17,8 @@ CREATE TABLE User (
 CREATE TABLE Paste (
 	owner TEXT,
 	id   TEXT,
-    hash TEXT,
-    name TEXT
+	hash TEXT,
+	name TEXT
 );
 `
 
