@@ -71,6 +71,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	files := make(map[int]string)
 	names := make(map[int]string)
+	types := make(map[int]string)
 	var index []int
 	for {
 		p, err := form.NextPart()
@@ -211,8 +212,15 @@ func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
 			}
 			r, ctype, err := s.getPasteFile(f)
 			defer r.Close()
-			if ctype != "text/plain;" {
-				return template.HTML("non-text file not rendered")
+			// if ctype != "text/plain;" {
+			// 	return template.HTML("<p>(non-text file not rendered)</p>")
+			// }
+			switch {
+			case strings.HasPrefix(ctype, "text/"):
+				break
+			case strings.HasPrefix(ctype, "image/"):
+				return template.HTML(fmt.Sprintf(`<img src="%sblob/%s" alt="%s">`,
+					s.BaseURL, f.Hash, f.Name))
 			}
 			contents, err := ioutil.ReadAll(r)
 			if err != nil {

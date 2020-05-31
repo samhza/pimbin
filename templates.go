@@ -24,7 +24,9 @@ const pasteTemplate = `{{ define "paste" }}
 </ul>
 {{ end }}
 {{ range .Paste.Files}}
+{{ if lt 1 (len $.Paste.Files)}}
 <a href="#{{.Name}}">#</a>
+{{ end }}
 <h1 id="{{.Name}}" class="filename">{{.Name}}</h1>
 <a href="{{ $.BaseURL }}blob/{{ .Hash }}/{{ .Name }}">raw</a>
 {{ renderChroma . }}
