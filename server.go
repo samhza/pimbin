@@ -114,6 +114,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			}
 			index = append(index, i)
 			files[i] = file
+			types[i] = contentType
 			if name := p.FileName(); name != "" {
 				names[i] = name
 			}
@@ -148,6 +149,9 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		name, ok := names[i]
 		if !ok {
 			name = strconv.Itoa(i)
+			if exts, err := mime.ExtensionsByType(types[i]); err == nil {
+				name = name + exts[0]
+			}
 		}
 		file := File{
 			Hash: files[i],
@@ -171,7 +175,20 @@ func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
+	if len(p.Files) == 1 {
+		f, ctype, err := s.getPasteFile(p.Files[0])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		println(ctype)
+		if ctype != "text/plain;" {
+			http.Redirect(w, r,
+				s.BaseURL+"blob/"+p.Files[0].Hash+"/"+p.Files[0].Name, 301)
+			return
+		}
+		f.Close()
+	}
 	funcMap := template.FuncMap{
 		"renderChroma": func(f File) template.HTML {
 			lexer := lexers.Match(f.Name)
