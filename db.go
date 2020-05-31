@@ -33,7 +33,7 @@ type User struct {
 type Paste struct {
 	ID    string
 	Owner string
-	Files map[string]string
+	Files []File
 }
 
 type File struct {
@@ -42,7 +42,7 @@ type File struct {
 }
 
 type DB struct {
-	lock sync.Mutex
+	lock sync.RWMutex
 	db   *sql.DB
 }
 
@@ -119,14 +119,45 @@ func (db *DB) CreateUser(user *User) error {
 func (db *DB) PutPaste(p Paste) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
-	var err error
-	for k, v := range p.Files {
-		_, err = db.db.Exec("INSERT INTO Paste(owner, id, hash, name) VALUES (?, ?, ?, ?)", "name", p.ID, v, k)
-		if err != nil {
-			break
+	stmt, err := db.db.Prepare("INSERT INTO Paste(owner, id, hash, name) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, f := range p.Files {
+		if _, err = stmt.Exec("name", p.ID, f.Hash, f.Name); err != nil {
+			return err
 		}
 	}
-	return err
+	return nil
+}
+
+func (db *DB) GetPaste(id string) (*Paste, error) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+	rows, err := db.db.Query("SELECT hash,name FROM Paste WHERE id=?", id)
+	if err != nil {
+		return nil, err
+	}
+	paste := &Paste{
+		ID: id,
+	}
+	for rows.Next() {
+		var (
+			hash string
+			name string
+		)
+		if err := rows.Scan(&hash, &name); err != nil {
+			return nil, err
+		}
+		file := File{
+			Hash: hash,
+			Name: name,
+		}
+		println(hash, name)
+		paste.Files = append(paste.Files, file)
+	}
+	return paste, nil
 }
 
 func (db *DB) Close() error {
