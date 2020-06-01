@@ -1,4 +1,4 @@
-package main
+package pimbin
 
 const defaultCSS = ` /* Pimbin's default CSS (Solarized Dark)*/
 

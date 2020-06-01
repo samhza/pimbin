@@ -1,4 +1,4 @@
-package main
+package pimbin
 
 import (
 	"bufio"
@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -18,10 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alecthomas/chroma"
-	"github.com/alecthomas/chroma/formatters/html"
-	"github.com/alecthomas/chroma/lexers"
-	"github.com/alecthomas/chroma/styles"
 	"github.com/go-chi/chi"
 )
 
@@ -42,9 +37,10 @@ type Server struct {
 	router *chi.Mux
 	db     *DB
 	ticker *time.Ticker
+	users  []*user
 }
 
-func NewServer(db *DB) *Server {
+func NewServer(db *DB) (*Server, error) {
 	t := time.NewTicker(time.Second)
 	r := chi.NewRouter()
 	s := &Server{
@@ -52,12 +48,19 @@ func NewServer(db *DB) *Server {
 		router: r,
 		ticker: t,
 	}
+	users, err := s.db.ListUsers()
+	if err != nil {
+		return nil, err
+	}
+	for _, u := range users {
+		s.users = append(s.users, &user{srv: s, User: u})
+	}
 	r.Get("/style.css", s.handleCSS)
 	r.Get("/{id}", s.handleGetPaste)
 	r.Get("/blob/{hash}", s.handleGetFile)
 	r.Get("/blob/{hash}/{name}", s.handleGetFile)
 	r.Post("/", s.handleUpload)
-	return s
+	return s, nil
 }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
@@ -141,7 +144,6 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sort.Ints(index)
-	fmt.Println(index)
 	paste := Paste{
 		Owner: "sam",
 		ID:    s.id(),
@@ -159,7 +161,6 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			Name: name,
 		}
 		paste.Files = append(paste.Files, file)
-		fmt.Printf("name: %v file: %v\n", name, files[i])
 	}
 	err = s.db.PutPaste(paste)
 	if err != nil {
@@ -182,7 +183,6 @@ func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		println(ctype)
 		if ctype != "text/plain;" {
 			http.Redirect(w, r,
 				s.BaseURL+"blob/"+p.Files[0].Hash+"/"+p.Files[0].Name, 301)
@@ -190,63 +190,7 @@ func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
 		}
 		f.Close()
 	}
-	funcMap := template.FuncMap{
-		"renderChroma": func(f File) template.HTML {
-			lexer := lexers.Match(f.Name)
-			if lexer == nil {
-				lexer = lexers.Fallback
-			}
-			lexer = chroma.Coalesce(lexer)
-			style := styles.Get("dracula")
-			if style == nil {
-				style = styles.Fallback
-			}
-			formatter := html.New(
-				html.WithClasses(true),
-				html.LineNumbersInTable(true),
-				html.LinkableLineNumbers(true, f.Name+"-L"),
-				html.WithLineNumbers(true))
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return ""
-			}
-			r, ctype, err := s.getPasteFile(f)
-			defer r.Close()
-			// if ctype != "text/plain;" {
-			// 	return template.HTML("<p>(non-text file not rendered)</p>")
-			// }
-			switch {
-			case strings.HasPrefix(ctype, "text/"):
-				break
-			case strings.HasPrefix(ctype, "image/"):
-				return template.HTML(fmt.Sprintf(`<img src="%sblob/%s" alt="%s">`,
-					s.BaseURL, f.Hash, f.Name))
-			}
-			contents, err := ioutil.ReadAll(r)
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return ""
-			}
-			iterator, err := lexer.Tokenise(nil, string(contents))
-			var b strings.Builder
-			err = formatter.Format(&b, style, iterator)
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return ""
-			}
-			return template.HTML(b.String())
-		}}
-
-	t, err := template.New("paste").Funcs(funcMap).Parse(pasteTemplate)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	err = t.ExecuteTemplate(w, "paste", pasteView{BaseURL: s.BaseURL, Paste: *p})
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+	s.renderPaste(w, p)
 }
 
 func (s *Server) downloadFile(r io.Reader) (string, error) {
@@ -267,7 +211,6 @@ func (s *Server) downloadFile(r io.Reader) (string, error) {
 	}
 	hash := base64.URLEncoding.WithPadding(
 		base64.NoPadding).EncodeToString(h.Sum(nil))
-	println(hash)
 	err = os.Rename(f.Name(),
 		filepath.Join(s.UploadsDir, hash))
 	if err != nil {
