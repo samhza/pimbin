@@ -1,0 +1,14 @@
+# Address for the server to listen on
+address = ":3000"
+# Path for the sqlite database
+db = "pimbin.db"
+# Where the server will save files
+uploads = "uploads"
+# Base URL (used for returning links to pastes)
+base-url = "http://localhost:3000/"
+# Filetypes to filter. Example: [ "text/plain" ]
+filter-types = [ "" ]
+# If set to true, filter-types will be a whitelist instead of a blacklist
+filter-allow = false
+# Maximum size per request (in bytes)
+max-body-size = 512000000

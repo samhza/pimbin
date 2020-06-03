@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -75,7 +76,6 @@ func (db *DB) migrate() error {
 		return fmt.Errorf("couldn't start db transaction: %v", err)
 	}
 	var version int
-	// var ver int
 	if err := db.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("couldn't query schema version: %v", err)
 	}
@@ -134,6 +134,7 @@ func (db *DB) ListUsers() ([]User, error) {
 			return nil, err
 		}
 		user.Password = fromStringPtr(password)
+		user.Token = fromStringPtr(token)
 		users = append(users, user)
 	}
 	if err := rows.Err(); err != nil {
@@ -178,10 +179,20 @@ func (db *DB) RefreshToken(user *User) (string, error) {
 	}
 	token := base64.URLEncoding.EncodeToString(b)
 	_, err = db.db.Exec("UPDATE users SET token = ? WHERE username = ?", token, user.Name)
-	// if strings.Contains(err.Error(), "UNIQUE") {
-	// 	return db.RefreshToken(user)
-	// }
+	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+		return db.RefreshToken(user)
+	}
 	return token, err
+}
+
+func (db *DB) UpdatePassword(user *User) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	password := toStringPtr(user.Password)
+	_, err := db.db.Exec(`UPDATE users SET password = ? WHERE username = ?`,
+		password, user.Name)
+	return err
 }
 
 func (db *DB) PutPaste(p Paste) error {

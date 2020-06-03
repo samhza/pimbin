@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	stdhtml "html"
+
 	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/formatters/html"
 	"github.com/alecthomas/chroma/lexers"
@@ -38,10 +40,9 @@ const pasteTemplate = `{{ define "paste" }}
 {{ end }}
 {{ range .Paste.Files}}
 {{ if lt 1 (len $.Paste.Files)}}
-<a href="#{{.Name}}">#</a>
 {{ end }}
 <h1 id="{{.Name}}" class="filename">{{.Name}}</h1>
-<a href="{{ $.BaseURL }}blob/{{ .Hash }}/{{ .Name }}">raw</a>
+<a href="{{ $.BaseURL }}raw/{{ .Hash }}/{{ .Name }}">raw</a>
 {{ renderFile . }}
 {{ end }}
 </body>
@@ -75,7 +76,7 @@ func (s *Server) renderFile(f File) template.HTML {
 	formatter := html.New(
 		html.WithClasses(true),
 		html.LineNumbersInTable(true),
-		html.LinkableLineNumbers(true, f.Name+"-L"),
+		html.LinkableLineNumbers(true, stdhtml.EscapeString(f.Name+"-L")),
 		html.WithLineNumbers(true))
 	r, ctype, err := s.getPasteFile(f)
 	defer r.Close()
@@ -83,7 +84,7 @@ func (s *Server) renderFile(f File) template.HTML {
 	case strings.HasPrefix(ctype, "text/"):
 		break
 	case strings.HasPrefix(ctype, "image/"):
-		return template.HTML(fmt.Sprintf(`<img src="%sblob/%s" alt="%s">`,
+		return template.HTML(fmt.Sprintf(`<img src="%raw/%s" alt="%s">`,
 			s.BaseURL, f.Hash, f.Name))
 	default:
 		return template.HTML("<p>(binary file not rendered)</p>")

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -22,22 +23,18 @@ import (
 
 type FilterType int
 
-const (
-	FilterDeny  FilterType = 0
-	FilterAllow            = 1
-)
-
 type Server struct {
-	FilterType FilterType
-	Filter     []string
-	UploadsDir string
-	CSSPath    string
-	BaseURL    string
+	FilterAllow bool
+	Filter      []string
+	UploadsDir  string
+	CSSPath     string
+	BaseURL     string
+	MaxBodySize int64
 
 	router *chi.Mux
 	db     *DB
 	ticker *time.Ticker
-	users  []*user
+	users  map[string]*user
 }
 
 func NewServer(db *DB) (*Server, error) {
@@ -47,18 +44,19 @@ func NewServer(db *DB) (*Server, error) {
 		db:     db,
 		router: r,
 		ticker: t,
+		users:  make(map[string]*user),
 	}
 	users, err := s.db.ListUsers()
 	if err != nil {
 		return nil, err
 	}
 	for _, u := range users {
-		s.users = append(s.users, &user{srv: s, User: u})
+		s.users[u.Name] = &user{srv: s, User: u}
 	}
 	r.Get("/style.css", s.handleCSS)
 	r.Get("/{id}", s.handleGetPaste)
-	r.Get("/blob/{hash}", s.handleGetFile)
-	r.Get("/blob/{hash}/{name}", s.handleGetFile)
+	r.Get("/raw/{hash}", s.handleGetFile)
+	r.Get("/raw/{hash}/{name}", s.handleGetFile)
 	r.Post("/", s.handleUpload)
 	return s, nil
 }
@@ -67,6 +65,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
+	user, err := s.authorize(r)
+	if err != nil {
+		http.Error(w, err.Error(), 403)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, s.MaxBodySize)
+	paste := Paste{
+		Owner: user.Name,
+	}
 	form, err := r.MultipartReader()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -144,14 +151,15 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sort.Ints(index)
-	paste := Paste{
-		Owner: "sam",
-		ID:    s.id(),
-	}
+	paste.ID = s.id()
 	for _, i := range index {
 		name, ok := names[i]
 		if !ok {
-			name = strconv.Itoa(i)
+			if len(index) == 1 {
+				name = ""
+			} else {
+				name = strconv.Itoa(i)
+			}
 			if exts, err := mime.ExtensionsByType(types[i]); err == nil {
 				name = name + exts[0]
 			}
@@ -167,7 +175,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	fmt.Fprint(w, "http://localhost:8080/"+paste.ID+"\n")
+	fmt.Fprintf(w, "%s%s\n", s.BaseURL, paste.ID)
 }
 
 func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
@@ -183,9 +191,9 @@ func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		if ctype != "text/plain;" {
+		if ctype != "text/plain" {
 			http.Redirect(w, r,
-				s.BaseURL+"blob/"+p.Files[0].Hash+"/"+p.Files[0].Name, 301)
+				s.BaseURL+"raw/"+p.Files[0].Hash+"/"+p.Files[0].Name, 301)
 			return
 		}
 		f.Close()
@@ -232,10 +240,10 @@ func (s *Server) allowType(t string) bool {
 	t = strings.Split(t, ";")[0]
 	for _, f := range s.Filter {
 		if f == t {
-			return s.FilterType == FilterAllow
+			return s.FilterAllow
 		}
 	}
-	return s.FilterType != FilterAllow
+	return !s.FilterAllow
 }
 
 func (s *Server) handleCSS(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +283,21 @@ func (s *Server) getPasteFile(file File) (*os.File, string, error) {
 		}
 	}
 	if strings.HasPrefix(ctype, "text/") {
-		ctype = "text/plain;"
+		ctype = "text/plain"
 	}
 	return f, ctype, nil
+}
+
+func (s *Server) authorize(r *http.Request) (*user, error) {
+	auth := r.Header["Authorization"]
+	if len(auth) < 1 {
+		return nil, errors.New("no token provided")
+	}
+	token := auth[0]
+	for _, u := range s.users {
+		if token == u.Token {
+			return u, nil
+		}
+	}
+	return nil, errors.New(("invalid token provided"))
 }
