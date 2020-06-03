@@ -21,8 +21,6 @@ import (
 	"github.com/go-chi/chi"
 )
 
-type FilterType int
-
 type Server struct {
 	FilterAllow bool
 	Filter      []string
