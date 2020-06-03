@@ -16,6 +16,7 @@ type Server struct {
 	Filter      []string `toml:"filter-types"`
 	MaxBodySize int64    `toml:"max-body-size"`
 	CSSPath     string   `toml:"css"`
+	SiteName    string   `toml:"name"`
 }
 
 func Defaults() *Server {
@@ -25,6 +26,7 @@ func Defaults() *Server {
 		MaxBodySize: 512000000,
 		DBPath:      "pimbin.db",
 		UploadsDir:  "uploads",
+		SiteName:    "pimbin",
 	}
 }
 

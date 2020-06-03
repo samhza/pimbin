@@ -16,8 +16,9 @@ import (
 )
 
 type pasteView struct {
-	BaseURL string
-	Paste   Paste
+	SiteName string
+	BaseURL  string
+	Paste    Paste
 }
 
 const pasteTemplate = `{{ define "paste" }}
@@ -26,7 +27,7 @@ const pasteTemplate = `{{ define "paste" }}
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="{{ .BaseURL }}style.css">
-  <title>{{ .Paste.ID }}</title>
+  <title>{{ .SiteName }}</title>
   <meta name="description" content = "
 {{ range .Paste.Files -}}
 - {{ .Name }}
@@ -61,7 +62,10 @@ func (s *Server) renderPaste(w http.ResponseWriter, p *Paste) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	err = t.ExecuteTemplate(w, "paste", pasteView{BaseURL: s.BaseURL, Paste: *p})
+	err = t.ExecuteTemplate(w, "paste", pasteView{
+		BaseURL:  s.BaseURL,
+		SiteName: s.SiteName,
+		Paste:    *p})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

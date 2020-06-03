@@ -29,6 +29,7 @@ type Server struct {
 	UploadsDir  string
 	CSSPath     string
 	BaseURL     string
+	SiteName    string
 	MaxBodySize int64
 
 	router *chi.Mux

@@ -145,6 +145,7 @@ func main() {
 		s.FilterAllow = cfg.FilterAllow
 		s.MaxBodySize = cfg.MaxBodySize
 		s.CSSPath = cfg.CSSPath
+		s.SiteName = cfg.SiteName
 		log.Fatalln(http.ListenAndServe(cfg.Addr, s))
 	default:
 		flag.Usage()

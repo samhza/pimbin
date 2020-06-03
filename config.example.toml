@@ -6,6 +6,8 @@ db = "pimbin.db"
 uploads = "uploads"
 # Base URL (used for returning links to pastes)
 base-url = "http://localhost:3000/"
+# Name (used in <title> tag)
+name = "pimbin"
 # Filetypes to filter. Example: [ "text/plain" ]
 filter-types = [ "" ]
 # If set to true, filter-types will be a whitelist instead of a blacklist
