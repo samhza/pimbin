@@ -93,7 +93,7 @@ func (s *Server) renderFile(f File) template.HTML {
 	case strings.HasPrefix(ctype, "text/"):
 		break
 	case strings.HasPrefix(ctype, "image/"):
-		return template.HTML(fmt.Sprintf(`<img src="%raw/%s" alt="%s">`,
+		return template.HTML(fmt.Sprintf(`<img src="%sraw/%s" alt="%s">`,
 			s.BaseURL, f.Hash, f.Name))
 	default:
 		return template.HTML("<p>(binary file not rendered)</p>")
