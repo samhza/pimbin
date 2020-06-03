@@ -1,6 +1,6 @@
 package pimbin
 
-const defaultCSS = ` /* Pimbin's default CSS (Solarized Dark)*/
+const defaultCSS = ` /* Pimbin's default CSS */
 
 body { font-family: monospace; background-color: #ffffff }
 
