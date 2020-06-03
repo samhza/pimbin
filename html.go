@@ -26,6 +26,11 @@ const pasteTemplate = `{{ define "paste" }}
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="{{ .BaseURL }}style.css">
+  <title>{{ .Paste.ID }}</title>
+  <meta name="description" content = "
+{{ range .Paste.Files -}}
+- {{ .Name }}
+{{ end -}}">
 </head>
 <body>
 {{ if lt 1 (len .Paste.Files)}}
