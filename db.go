@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // because we need the driver
 )
 
 const schema = `
@@ -32,28 +32,33 @@ CREATE TABLE files (
 
 var migrations = []string{""}
 
+// User contains a user's data.
 type User struct {
 	Password string
 	Name     string
 	Token    string
 }
 
+// Paste contains a paste's data.
 type Paste struct {
 	ID    string
 	Owner string
 	Files []File
 }
 
+// File describes a paste's file.
 type File struct {
 	Hash string
 	Name string
 }
 
+// DB is a pimbin database.
 type DB struct {
 	lock sync.RWMutex
 	db   *sql.DB
 }
 
+// OpenSQLiteDB opens and returns an sqlite3 database from the path provided.
 func OpenSQLiteDB(source string) (*DB, error) {
 	sqlDB, err := sql.Open("sqlite3", source)
 	if err != nil {
@@ -113,6 +118,7 @@ func toStringPtr(s string) *string {
 	return &s
 }
 
+// ListUsers lists the users in the database.
 func (db *DB) ListUsers() ([]User, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -144,6 +150,7 @@ func (db *DB) ListUsers() ([]User, error) {
 	return users, nil
 }
 
+// GetUser returns a user from their username, or an error if one occurs while trying to retrieve them.
 func (db *DB) GetUser(username string) (*User, error) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -159,6 +166,7 @@ func (db *DB) GetUser(username string) (*User, error) {
 	return user, nil
 }
 
+// CreateUser inserts user into the database.
 func (db *DB) CreateUser(user *User) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -168,6 +176,7 @@ func (db *DB) CreateUser(user *User) error {
 	return err
 }
 
+// RefreshToken refreshes a user's token and returns the new token.
 func (db *DB) RefreshToken(user *User) (string, error) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -185,6 +194,7 @@ func (db *DB) RefreshToken(user *User) (string, error) {
 	return token, err
 }
 
+// UpdatePassword records changes to user's password in the database.
 func (db *DB) UpdatePassword(user *User) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -195,10 +205,14 @@ func (db *DB) UpdatePassword(user *User) error {
 	return err
 }
 
+// PutPaste inserts the given paste into the database.
 func (db *DB) PutPaste(p Paste) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
-	db.db.Exec("INSERT INTO pastes(id,owner) VALUES(?, ?)", p.ID, p.Owner)
+	_, err := db.db.Exec("INSERT INTO pastes(id,owner) VALUES(?, ?)", p.ID, p.Owner)
+	if err != nil {
+		return err
+	}
 	stmt, err := db.db.Prepare("INSERT INTO files(paste, hash, name) VALUES (?, ?, ?)")
 	if err != nil {
 		return err
@@ -212,6 +226,7 @@ func (db *DB) PutPaste(p Paste) error {
 	return nil
 }
 
+// GetPaste returns a paste from its ID.
 func (db *DB) GetPaste(id string) (*Paste, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -251,6 +266,18 @@ func (db *DB) GetPaste(id string) (*Paste, error) {
 	return paste, nil
 }
 
+// DeletePaste deletes a paste and its file entries by the id.
+func (db *DB) DeletePaste(id string) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+	_, err := db.db.Exec("DELETE FROM paste WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Close closes the DB.
 func (db *DB) Close() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()

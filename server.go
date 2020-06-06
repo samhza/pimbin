@@ -21,6 +21,7 @@ import (
 	"github.com/go-chi/chi"
 )
 
+// Server is a pimbin server, and contains some options.
 type Server struct {
 	FilterAllow bool
 	Filter      []string
@@ -36,6 +37,7 @@ type Server struct {
 	users  map[string]*user
 }
 
+// NewServer returns a new Server that uses the given database.
 func NewServer(db *DB) (*Server, error) {
 	t := time.NewTicker(time.Second)
 	r := chi.NewRouter()
