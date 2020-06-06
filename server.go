@@ -56,6 +56,7 @@ func NewServer(db *DB) (*Server, error) {
 	}
 	r.Get("/style.css", s.handleCSS)
 	r.Get("/{id}", s.handleGetPaste)
+	r.Delete("/{id}", s.handleDeletePaste)
 	r.Get("/raw/{hash}", s.handleGetFile)
 	r.Get("/raw/{hash}/{name}", s.handleGetFile)
 	r.Post("/", s.handleUpload)
@@ -177,6 +178,24 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprintf(w, "%s%s\n", s.BaseURL, paste.ID)
+}
+
+func (s *Server) handleDeletePaste(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	p, err := s.db.GetPaste(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	user, err := s.authorize(r)
+	if err != nil || p.Owner != user.Name {
+		http.Error(w, err.Error(), 403)
+		return
+	}
+	err := s.db.DeletePaste(id)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+	}
 }
 
 func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
