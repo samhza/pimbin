@@ -21,13 +21,13 @@ CREATE TABLE users (
 CREATE TABLE pastes (
 	id     CHAR(6) PRIMARY KEY NOT NULL,
 	owner  VARCHAR(255) NOT NULL,
-	FOREIGN KEY(owner) REFERENCES users(username),
-	FOREIGN KEY(id) REFERENCES files(paste) ON DELETE CASCADE
+	FOREIGN KEY(owner) REFERENCES users(username)
 );
 CREATE TABLE files (
 	paste CHAR(6) NOT NULL,
 	hash  CHAR(44) NOT NULL,
-	name  VARCHAR(128) NOT NULL
+	name  VARCHAR(128) NOT NULL,
+	FOREIGN KEY(paste) REFERENCES pastes(id) ON DELETE CASCADE
 );`
 
 var migrations = []string{""}
