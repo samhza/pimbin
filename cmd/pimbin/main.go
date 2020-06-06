@@ -18,9 +18,8 @@ const usage = `usage: pimbin [-config path] <command> [options...]
 	run                                 run pimbin
 	create-user     <username> [hash]   create a user
 	change-password <username> [hash]   change a user's password
-	refresh-token <username>            refresh a user's token
-	help                                show this message
-`
+	refresh-token   <username>          refresh a user's token
+	help                                show this message`
 
 func init() {
 	flag.Usage = func() {
