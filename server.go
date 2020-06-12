@@ -61,6 +61,11 @@ func NewServer(db *DB) (*Server, error) {
 	r.With(s.ownerCheck).Post("/", s.handleUpload)
 	return s, nil
 }
+
+// To make golint happy, and so there won't be any collisions
+type contextKey int
+const userKey contextKey = iota
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
 }
@@ -334,12 +339,12 @@ func (s *Server) ownerCheck(next http.Handler) http.Handler {
 }
 
 func userFromContext(ctx context.Context) *User {
-	if u, ok := ctx.Value("pimbin_user").(*User); ok {
+	if u, ok := ctx.Value(userKey).(*User); ok {
 		return u
 	}
 	return nil
 }
 
 func putUserContext(ctx context.Context, u *User) context.Context {
-	return context.WithValue(ctx, "pimbin", u)
+	return context.WithValue(ctx, userKey, u)
 }
