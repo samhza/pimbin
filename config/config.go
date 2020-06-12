@@ -17,6 +17,7 @@ type Server struct {
 	MaxBodySize int64    `toml:"max-body-size"`
 	CSSPath     string   `toml:"css"`
 	SiteName    string   `toml:"name"`
+	NoAuth      bool     `toml:"no-auth"`
 }
 
 func Defaults() *Server {

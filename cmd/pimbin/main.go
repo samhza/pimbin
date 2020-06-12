@@ -91,7 +91,7 @@ func main() {
 			flag.Usage()
 			os.Exit(1)
 		}
-		user, err := db.GetUser(name)
+		user, err := db.User(name)
 		if err != nil {
 			fmt.Printf("error retrieving user from db: %s\n", err)
 			os.Exit(1)
@@ -122,7 +122,7 @@ func main() {
 			flag.Usage()
 			os.Exit(1)
 		}
-		user, err := db.GetUser(name)
+		user, err := db.User(name)
 		if err != nil {
 			fmt.Printf("error getting user from db: %s\n", err)
 			os.Exit(1)
@@ -138,13 +138,7 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		s.UploadsDir = cfg.UploadsDir
-		s.BaseURL = cfg.BaseURL
-		s.Filter = cfg.Filter
-		s.FilterAllow = cfg.FilterAllow
-		s.MaxBodySize = cfg.MaxBodySize
-		s.CSSPath = cfg.CSSPath
-		s.SiteName = cfg.SiteName
+		s.Config = *cfg
 		log.Fatalln(http.ListenAndServe(cfg.Addr, s))
 	default:
 		flag.Usage()

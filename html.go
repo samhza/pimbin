@@ -63,8 +63,8 @@ func (s *Server) renderPaste(w http.ResponseWriter, p *Paste) {
 		return
 	}
 	err = t.ExecuteTemplate(w, "paste", pasteView{
-		BaseURL:  s.BaseURL,
-		SiteName: s.SiteName,
+		BaseURL:  s.Config.BaseURL,
+		SiteName: s.Config.SiteName,
 		Paste:    *p})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -94,7 +94,7 @@ func (s *Server) renderFile(f File) template.HTML {
 		break
 	case strings.HasPrefix(ctype, "image/"):
 		return template.HTML(fmt.Sprintf(`<img src="%sraw/%s" alt="%s">`,
-			s.BaseURL, f.Hash, f.Name))
+			s.Config.BaseURL, f.Hash, f.Name))
 	default:
 		return template.HTML("<p>(binary file not rendered)</p>")
 	}

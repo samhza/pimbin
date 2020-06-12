@@ -2,10 +2,10 @@ package pimbin
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,18 +18,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erebid/pimbin/config"
 	"github.com/go-chi/chi"
 )
 
 // Server is a pimbin server, and contains some options.
 type Server struct {
-	FilterAllow bool
-	Filter      []string
-	UploadsDir  string
-	CSSPath     string
-	BaseURL     string
-	SiteName    string
-	MaxBodySize int64
+	Config config.Server
 
 	router *chi.Mux
 	db     *DB
@@ -47,7 +42,7 @@ func NewServer(db *DB) (*Server, error) {
 		ticker: t,
 		users:  make(map[string]*user),
 	}
-	users, err := s.db.ListUsers()
+	users, err := s.db.Users()
 	if err != nil {
 		return nil, err
 	}
@@ -55,11 +50,15 @@ func NewServer(db *DB) (*Server, error) {
 		s.users[u.Name] = &user{srv: s, User: u}
 	}
 	r.Get("/style.css", s.handleCSS)
-	r.Get("/{id}", s.handleGetPaste)
-	r.Delete("/{id}", s.handleDeletePaste)
-	r.Get("/raw/{hash}", s.handleGetFile)
-	r.Get("/raw/{hash}/{name}", s.handleGetFile)
-	r.Post("/", s.handleUpload)
+	r.Route("/{id}", func(r chi.Router) {
+		r.Get("/", s.handleGetPaste)
+		r.With(s.ownerCheck).Delete("/", s.handleDeletePaste)
+	})
+	r.Route("/raw/{hash}", func(r chi.Router) {
+		r.Get("/", s.handleGetFile)
+		r.Get("/{name}", s.handleGetFile)
+	})
+	r.With(s.ownerCheck).Post("/", s.handleUpload)
 	return s, nil
 }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -67,14 +66,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
-	user, err := s.authorize(r)
-	if err != nil {
-		http.Error(w, err.Error(), 403)
-		return
+	var username string
+	if user := userFromContext(r.Context()); user != nil {
+		username = user.Name
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, s.MaxBodySize)
+	r.Body = http.MaxBytesReader(w, r.Body, s.Config.MaxBodySize)
 	paste := Paste{
-		Owner: user.Name,
+		Owner: username,
 	}
 	form, err := r.MultipartReader()
 	if err != nil {
@@ -97,17 +95,19 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		n := strings.Split(p.FormName(), ":")
-		if len(n) != 2 {
-			http.Error(w, "Invalid request", 400)
-		}
-
-		i, err := strconv.Atoi(n[1])
-		if err != nil {
-			http.Error(w, "Invalid request", 400)
+		var i int
+		switch len(n) {
+		case 1:
+			i = 1
+		case 2:
+			i, err = strconv.Atoi(n[1])
+			if err != nil {
+				http.Error(w, "Invalid request", 400)
+			}
 		}
 
 		switch n[0] {
-		case "f":
+		case "file", "f":
 			if _, ok := files[i]; ok {
 				http.Error(w, "Bad request", 400)
 				return
@@ -131,7 +131,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			if name := p.FileName(); name != "" {
 				names[i] = name
 			}
-		case "name":
+		case "name", "n":
 			reader := &io.LimitedReader{R: p, N: 129}
 			b := new(strings.Builder)
 			_, err := io.Copy(b, reader)
@@ -177,22 +177,23 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	fmt.Fprintf(w, "%s%s\n", s.BaseURL, paste.ID)
+	fmt.Fprintf(w, "%s%s\n", s.Config.BaseURL, paste.ID)
 }
 
 func (s *Server) handleDeletePaste(w http.ResponseWriter, r *http.Request) {
+	user := userFromContext(r.Context())
+	if user == nil {
+		http.Error(w, "unauthorized", 401)
+		return
+	}
+	username := r.Context().Value("user").(string)
 	id := chi.URLParam(r, "id")
-	p, err := s.db.GetPaste(id)
-	if err != nil {
-		http.NotFound(w, r)
+	p, err := s.db.Paste(id)
+	if err != nil || p.Owner != username {
+		http.Error(w, err.Error(), 401)
 		return
 	}
-	user, err := s.authorize(r)
-	if err != nil || p.Owner != user.Name {
-		http.Error(w, err.Error(), 403)
-		return
-	}
-	err := s.db.DeletePaste(id)
+	err = s.db.DeletePaste(id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 	}
@@ -200,7 +201,7 @@ func (s *Server) handleDeletePaste(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	p, err := s.db.GetPaste(id)
+	p, err := s.db.Paste(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -213,7 +214,7 @@ func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
 		}
 		if ctype != "text/plain" {
 			http.Redirect(w, r,
-				s.BaseURL+"raw/"+p.Files[0].Hash+"/"+p.Files[0].Name, 301)
+				s.Config.BaseURL+"raw/"+p.Files[0].Hash+"/"+p.Files[0].Name, 301)
 			return
 		}
 		f.Close()
@@ -222,11 +223,11 @@ func (s *Server) handleGetPaste(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) downloadFile(r io.Reader) (string, error) {
-	err := os.MkdirAll(s.UploadsDir, 0750)
+	err := os.MkdirAll(s.Config.UploadsDir, 0750)
 	if err != nil {
 		return "", nil
 	}
-	f, err := ioutil.TempFile(s.UploadsDir, "upload-*")
+	f, err := ioutil.TempFile(s.Config.UploadsDir, "upload-*")
 	if err != nil {
 		return "", err
 	}
@@ -240,7 +241,7 @@ func (s *Server) downloadFile(r io.Reader) (string, error) {
 	hash := base64.URLEncoding.WithPadding(
 		base64.NoPadding).EncodeToString(h.Sum(nil))
 	err = os.Rename(f.Name(),
-		filepath.Join(s.UploadsDir, hash))
+		filepath.Join(s.Config.UploadsDir, hash))
 	if err != nil {
 		return "", err
 	}
@@ -258,17 +259,17 @@ func (s *Server) id() string {
 
 func (s *Server) allowType(t string) bool {
 	t = strings.Split(t, ";")[0]
-	for _, f := range s.Filter {
+	for _, f := range s.Config.Filter {
 		if f == t {
-			return s.FilterAllow
+			return s.Config.FilterAllow
 		}
 	}
-	return !s.FilterAllow
+	return !s.Config.FilterAllow
 }
 
 func (s *Server) handleCSS(w http.ResponseWriter, r *http.Request) {
-	if s.CSSPath != "" {
-		http.ServeFile(w, r, s.CSSPath)
+	if s.Config.CSSPath != "" {
+		http.ServeFile(w, r, s.Config.CSSPath)
 		return
 	}
 	reader := strings.NewReader(defaultCSS)
@@ -288,7 +289,7 @@ func (s *Server) handleGetFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getPasteFile(file File) (*os.File, string, error) {
-	f, err := os.Open(filepath.Join(s.UploadsDir, file.Hash))
+	f, err := os.Open(filepath.Join(s.Config.UploadsDir, file.Hash))
 	if err != nil {
 		return nil, "", err
 	}
@@ -308,16 +309,37 @@ func (s *Server) getPasteFile(file File) (*os.File, string, error) {
 	return f, ctype, nil
 }
 
-func (s *Server) authorize(r *http.Request) (*user, error) {
-	auth := r.Header["Authorization"]
-	if len(auth) < 1 {
-		return nil, errors.New("no token provided")
-	}
-	token := auth[0]
-	for _, u := range s.users {
-		if token == u.Token {
-			return u, nil
+func (s *Server) ownerCheck(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.Config.NoAuth {
+			next.ServeHTTP(w, r)
+			return
 		}
+		auth := r.Header["Authorization"]
+		if len(auth) < 1 {
+			http.Error(w, "no token provided", 401)
+			return
+		}
+		token := auth[0]
+		for _, u := range s.users {
+			if token == u.Token {
+				ctx := putUserContext(r.Context(), &u.User)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+		}
+		http.Error(w, "invalid token provided", 403)
+		return
+	})
+}
+
+func userFromContext(ctx context.Context) *User {
+	if u, ok := ctx.Value("pimbin_user").(*User); ok {
+		return u
 	}
-	return nil, errors.New(("invalid token provided"))
+	return nil
+}
+
+func putUserContext(ctx context.Context, u *User) context.Context {
+	return context.WithValue(ctx, "pimbin", u)
 }

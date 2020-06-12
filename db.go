@@ -118,8 +118,8 @@ func toStringPtr(s string) *string {
 	return &s
 }
 
-// ListUsers lists the users in the database.
-func (db *DB) ListUsers() ([]User, error) {
+// Users lists the users in the database.
+func (db *DB) Users() ([]User, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -150,8 +150,8 @@ func (db *DB) ListUsers() ([]User, error) {
 	return users, nil
 }
 
-// GetUser returns a user from their username, or an error if one occurs while trying to retrieve them.
-func (db *DB) GetUser(username string) (*User, error) {
+// User returns a user from their username, or an error if one occurs while trying to retrieve them.
+func (db *DB) User(username string) (*User, error) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -226,8 +226,8 @@ func (db *DB) PutPaste(p Paste) error {
 	return nil
 }
 
-// GetPaste returns a paste from its ID.
-func (db *DB) GetPaste(id string) (*Paste, error) {
+// Paste returns a paste from its ID.
+func (db *DB) Paste(id string) (*Paste, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
