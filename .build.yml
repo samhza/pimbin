@@ -1,0 +1,9 @@
+image: alpine/edge
+packages:
+  - go
+sources:
+  - https://github.com/erebid/pimbin
+tasks:
+  - build: |
+      cd pimbin
+      go build -v ./...
