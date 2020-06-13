@@ -72,8 +72,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	var username string
-	if user := userFromContext(r.Context()); user != nil {
-		username = user.Name
+	if u, ok := r.Context().Value(userKey).(*User); ok {
+		username = u.Name
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, s.Config.MaxBodySize)
 	paste := Paste{
@@ -186,12 +186,13 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeletePaste(w http.ResponseWriter, r *http.Request) {
-	user := userFromContext(r.Context())
-	if user == nil {
+	var username string
+	if u, ok := r.Context().Value(userKey).(*User); ok {
+		username = u.Name
+	} else {
 		http.Error(w, "unauthorized", 401)
 		return
 	}
-	username := r.Context().Value("user").(string)
 	id := chi.URLParam(r, "id")
 	p, err := s.db.Paste(id)
 	if err != nil || p.Owner != username {
@@ -328,7 +329,7 @@ func (s *Server) ownerCheck(next http.Handler) http.Handler {
 		token := auth[0]
 		for _, u := range s.users {
 			if token == u.Token {
-				ctx := putUserContext(r.Context(), &u.User)
+				ctx := context.WithValue(r.Context(), userKey, &u.User)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -336,15 +337,4 @@ func (s *Server) ownerCheck(next http.Handler) http.Handler {
 		http.Error(w, "invalid token provided", 403)
 		return
 	})
-}
-
-func userFromContext(ctx context.Context) *User {
-	if u, ok := ctx.Value(userKey).(*User); ok {
-		return u
-	}
-	return nil
-}
-
-func putUserContext(ctx context.Context, u *User) context.Context {
-	return context.WithValue(ctx, userKey, u)
 }
