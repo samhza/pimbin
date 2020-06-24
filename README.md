@@ -3,4 +3,4 @@
 
 a (wip) file bin/host/uploader
 
-this readme is just a plaecholder, so check back later
+this readme is just a placeholder, so check back later
