@@ -188,7 +188,7 @@ func (db *DB) RefreshToken(user *User) (string, error) {
 	}
 	token := base64.URLEncoding.EncodeToString(b)
 	_, err = db.db.Exec("UPDATE users SET token = ? WHERE username = ?", token, user.Name)
-	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+	if err != nil && errors.Is(err, sqlite.ErrConstraintUnique) { {
 		return db.RefreshToken(user)
 	}
 	return token, err
