@@ -4,12 +4,13 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 
-	_ "github.com/mattn/go-sqlite3" // because we need the driver
+	"github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const schema = `
@@ -188,7 +189,7 @@ func (db *DB) RefreshToken(user *User) (string, error) {
 	}
 	token := base64.URLEncoding.EncodeToString(b)
 	_, err = db.db.Exec("UPDATE users SET token = ? WHERE username = ?", token, user.Name)
-	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+	if errors.Is(err, sqlite3.ErrConstraintUnique) {
 		return db.RefreshToken(user)
 	}
 	return token, err
