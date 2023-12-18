@@ -7,5 +7,5 @@ require (
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/pelletier/go-toml v1.8.0
-	golang.org/x/crypto v0.1.0
+	golang.org/x/crypto v0.17.0
 )
